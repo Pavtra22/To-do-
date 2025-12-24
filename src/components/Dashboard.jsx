@@ -1,16 +1,16 @@
 import { useState } from "react";
 
 function Dashboard({ onLogout }) {
-  // Theme state
+  // Theme state default bg
   const [theme, setTheme] = useState("yellow");
 
-  // Form state
+  // Add / Edit Task state
   const [taskText, setTaskText] = useState("");
   const [priority, setPriority] = useState("Low");
   const [date, setDate] = useState("");
   const [editIndex, setEditIndex] = useState(null);
 
-  // Tasks (dummy + dynamic)
+  // Tasks (dummy data)
   const [tasks, setTasks] = useState([
     { title: "Task 1", priority: "High", date: "2025-12-16", done: true },
     { title: "Task 2", priority: "Low", date: "2025-12-26", done: false },
@@ -64,6 +64,7 @@ function Dashboard({ onLogout }) {
   function deleteTask(index) {
     setTasks(tasks.filter((_, i) => i !== index));
   }
+  
 
   /* ---------- CHECKBOX ---------- */
   function toggleDone(index) {
