@@ -1,0 +1,9 @@
+/* /* App.css - kept minimal because Tailwind is used */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
