@@ -1,15 +1,18 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getTasks, createTask, updateTask, deleteTask } from "../api";
+import { toast } from "react-toastify";
 
 function Dashboard({ onLogout }) {
   const [theme, setTheme] = useState("yellow");
-
   const [taskText, setTaskText] = useState("");
   const [priority, setPriority] = useState("Low");
   const [date, setDate] = useState("");
   const [editTaskObj, setEditTaskObj] = useState(null);
+  const formRef = useRef(null);
 
+  const [statusFilter, setStatusFilter] = useState("All");
   const [tasks, setTasks] = useState([]);
+  const [sortOrder, setSortOrder] = useState("soonest");
 
   const themes = {
     yellow: "bg-yellow-100",
@@ -18,7 +21,43 @@ function Dashboard({ onLogout }) {
     pink: "bg-pink-100",
   };
 
-  // Load tasks once
+  const getPriorityClasses = (priority) => {
+    switch (priority) {
+      case "High":
+        return "bg-red-100 text-red-700 border border-red-300";
+      case "Medium":
+        return "bg-yellow-100 text-yellow-700 border border-yellow-300";
+      case "Low":
+        return "bg-green-100 text-green-700 border border-green-300";
+      default:
+        return "bg-gray-100 text-gray-700 border";
+    }
+  };
+
+  const isOverdue = (task) => {
+    const today = new Date();
+    const due = new Date(task.due_date);
+
+    today.setHours(0, 0, 0, 0);
+    due.setHours(0, 0, 0, 0);
+
+    return task.is_completed === 0 && due < today;
+  };
+
+  /* ---------- FILTER + SORT ---------- */
+  const filteredTasks = tasks.filter((task) => {
+    if (statusFilter === "Pending") return task.is_completed === 0;
+    if (statusFilter === "Completed") return task.is_completed === 1;
+    return true;
+  });
+
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
+    const d1 = new Date(a.due_date);
+    const d2 = new Date(b.due_date);
+    return sortOrder === "soonest" ? d1 - d2 : d2 - d1;
+  });
+
+  /* ---------- LOAD TASKS ---------- */
   useEffect(() => {
     loadTasks();
   }, []);
@@ -28,70 +67,84 @@ function Dashboard({ onLogout }) {
     setTasks(data);
   }
 
-  /* ---------- ADD / UPDATE TASK ---------- */
+  /* ---------- ADD / UPDATE ---------- */
   async function addOrUpdateTask() {
-    if (!taskText || !date) return;
-
-    // UPDATE
-    if (editTaskObj) {
-      await updateTask(editTaskObj.task_id, {
-        ...editTaskObj,
-        title: taskText,
-        priority,
-        due_date: date,
-      });
-      setEditTaskObj(null);
-    } 
-    // ADD NEW
-    else {
-      await createTask({
-        user_id: 1,
-        title: taskText,
-        priority,
-        due_date: date,
-        is_completed: 0,
-      });
+    if (!taskText || !date) {
+      toast.error("Please enter task and date");
+      return;
     }
 
-    setTaskText("");
-    setPriority("Low");
-    setDate("");
+    try {
+      if (editTaskObj) {
+        await updateTask(editTaskObj.task_id, {
+          ...editTaskObj,
+          title: taskText,
+          priority,
+          due_date: date,
+        });
+        toast.info("Task updated");
+        setEditTaskObj(null);
+      } else {
+        await createTask({
+          user_id: 1,
+          title: taskText,
+          priority,
+          due_date: date,
+          is_completed: 0,
+        });
+        toast.success("Task created");
+      }
 
-    loadTasks();
+      setTaskText("");
+      setPriority("Low");
+      setDate("");
+      loadTasks();
+    } catch {
+      toast.error("Something went wrong");
+    }
   }
 
   /* ---------- EDIT ---------- */
   function editTask(task) {
+    setEditTaskObj(task);
     setTaskText(task.title);
     setPriority(task.priority);
     setDate(task.due_date);
-    setEditTaskObj(task);
+
+    formRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
   /* ---------- DELETE ---------- */
   async function deleteTaskById(id) {
     await deleteTask(id);
+    toast.warn("Task deleted");
     loadTasks();
   }
 
-  /* ---------- CHECKBOX ---------- */
+  /* ---------- TOGGLE COMPLETE ---------- */
   async function toggleDone(task) {
     await updateTask(task.task_id, {
       ...task,
       is_completed: task.is_completed ? 0 : 1,
     });
+
+    toast.success(
+      task.is_completed ? "Marked Pending" : "Marked Completed"
+    );
+
     loadTasks();
   }
 
   return (
     <div className={`min-h-screen ${themes[theme]}`}>
-      {/* Header */}
+
+      {/* HEADER */}
       <div className="bg-orange-500 text-white px-6 py-4 flex justify-between">
         <h1 className="text-xl font-bold">ToDo App</h1>
         <button onClick={onLogout}>Logout</button>
       </div>
 
-      {/* Theme Selector */}
+      {/* THEME DROPDOWN */}
       <div className="p-6">
         <select
           onChange={(e) => setTheme(e.target.value)}
@@ -104,8 +157,11 @@ function Dashboard({ onLogout }) {
         </select>
       </div>
 
-      {/* Add / Edit Task */}
-      <div className="max-w-4xl mx-auto bg-white p-6 rounded shadow">
+      {/* ADD / EDIT CARD */}
+      <div
+        ref={formRef}
+        className="max-w-4xl mx-auto bg-white p-6 rounded shadow"
+      >
         <h2 className="text-orange-600 font-semibold mb-4">
           Add / Edit Task
         </h2>
@@ -144,14 +200,61 @@ function Dashboard({ onLogout }) {
         </button>
       </div>
 
-      {/* Tasks List */}
+      {/* TASK LIST CARD */}
       <div className="max-w-4xl mx-auto bg-white mt-6 p-6 rounded shadow">
+
         <h2 className="text-orange-600 font-semibold mb-4">Tasks</h2>
 
-        {tasks.map((task) => (
+        {/* FILTER + SORT */}
+        <div className="flex gap-3 mb-4">
+
+          <button
+            onClick={() => setStatusFilter("All")}
+            className={`px-3 py-1 rounded border ${
+              statusFilter === "All" ? "bg-orange-500 text-white" : ""
+            }`}
+          >
+            All
+          </button>
+
+          <button
+            onClick={() => setStatusFilter("Pending")}
+            className={`px-3 py-1 rounded border ${
+              statusFilter === "Pending" ? "bg-orange-500 text-white" : ""
+            }`}
+          >
+            Pending
+          </button>
+
+          <button
+            onClick={() => setStatusFilter("Completed")}
+            className={`px-3 py-1 rounded border ${
+              statusFilter === "Completed" ? "bg-orange-500 text-white" : ""
+            }`}
+          >
+            Completed
+          </button>
+
+          <button
+            onClick={() =>
+              setSortOrder(sortOrder === "soonest" ? "latest" : "soonest")
+            }
+            className="px-3 py-1 border rounded bg-gray-100"
+          >
+            Sort: {sortOrder === "soonest" ? "Soonest First" : "Latest First"}
+          </button>
+        </div>
+
+        {/* TASK ROWS */}
+        {sortedTasks.map((task) => (
           <div
             key={task.task_id}
-            className="flex justify-between items-center border-b py-3"
+            className={`flex justify-between items-center border-b py-3 rounded 
+              ${
+                isOverdue(task)
+                  ? "bg-red-50 border-red-300"
+                  : "bg-white border-gray-200"
+              }`}
           >
             <div className="flex items-center gap-3">
               <input
@@ -161,17 +264,30 @@ function Dashboard({ onLogout }) {
               />
 
               <div>
-                <p className={task.is_completed ? "line-through text-gray-500" : ""}>
+                <p
+                  className={
+                    task.is_completed ? "line-through text-gray-500" : ""
+                  }
+                >
                   {task.title}
                 </p>
 
-                <p className="text-sm text-gray-500">
-                  Priority: {task.priority} | Due: {task.due_date}
+                <p className="text-sm text-gray-500 flex gap-2">
+                  <span
+                    className={`px-2 py-1 rounded text-xs ${getPriorityClasses(
+                      task.priority
+                    )}`}
+                  >
+                    {task.priority}
+                  </span>
+                  | Due: {task.due_date}
                 </p>
 
                 <p
                   className={`text-sm font-semibold ${
-                    task.is_completed ? "text-green-600" : "text-orange-600"
+                    task.is_completed
+                      ? "text-green-600"
+                      : "text-orange-600"
                   }`}
                 >
                   {task.is_completed ? "Completed" : "Pending"}
@@ -186,6 +302,7 @@ function Dashboard({ onLogout }) {
               >
                 Edit
               </button>
+
               <button
                 onClick={() => deleteTaskById(task.task_id)}
                 className="text-red-500"
@@ -195,6 +312,7 @@ function Dashboard({ onLogout }) {
             </div>
           </div>
         ))}
+
       </div>
     </div>
   );

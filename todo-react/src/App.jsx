@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import Login from "./components/Login";
 import Dashboard from "./components/Dashboard";
@@ -45,9 +47,12 @@ function App() {
               <Navigate to="/login" />
             )
           }
+          
         />
 
       </Routes>
+      <ToastContainer position="top-center" autoClose={2500} />
+
     </BrowserRouter>
   );
 }
